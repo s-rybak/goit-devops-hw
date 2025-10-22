@@ -2,8 +2,6 @@
 
 # Ubuntu
 
-export DEBIAN_FRONTEND=noninteractive
-
 apt-get update
 INSTALL_DEPS="ca-certificates curl"
 
@@ -49,7 +47,7 @@ else
 fi
 
 #PYTHON
-PYTHON_PACKAGES="python3 python3-pip"
+PYTHON_PACKAGES="python3 python3-pip python3-venv"
 
 for i in $PYTHON_PACKAGES; do 
     if dpkg -l | grep -q "$i" >/dev/null 2>&1; then
@@ -61,9 +59,20 @@ for i in $PYTHON_PACKAGES; do
 done
 
 #DJANGO
-if dpkg -l | grep -q "python3-django" >/dev/null 2>&1; then
+VENV_DIR="${HOME}/.venvs/devtools"
+if [ ! -d "$VENV_DIR" ]; then
+    echo "Creating virtual environment in $VENV_DIR"
+    python3 -m venv $VENV_DIR
+fi
+
+source $VENV_DIR/bin/activate
+
+VENV_PIP="${VENV_DIR}/bin/pip"
+VENV_PYTHON="${VENV_DIR}/bin/python"
+
+if $VENV_PIP show django >/dev/null 2>&1; then
     echo "Django is already installed"
 else
     echo "Installing Django"
-    apt-get install -y python3-django
+    $VENV_PIP install django 
 fi
