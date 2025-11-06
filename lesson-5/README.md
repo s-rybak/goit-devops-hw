@@ -1,32 +1,49 @@
-# Lesson 5 - Terraform Infrastructure
+# Lesson 5 - Terraform Infrastructure with EKS
 
-Цей проєкт демонструє базову інфраструктуру AWS, розгорнуту за допомогою Terraform з використанням модульної архітектури.
+Цей проєкт демонструє інфраструктуру AWS, розгорнуту за допомогою Terraform з використанням модульної архітектури. Включає створення Kubernetes кластера (EKS) та автоматичне розгортання Django-додатку за допомогою Helm.
 
-##Структура проєкту
+## Структура проєкту
 
 ```
-lesson-5/
-├── main.tf                 # Головний файл конфігурації, підключає модулі
-├── backend.tf              # Налаштування віддаленого бекенду (S3 + DynamoDB)
-├── outputs.tf              # Вивід (outputs) ресурсів інфраструктури
-├── terraform.tfstate       # Локальний файл стану Terraform
-├── terraform.tfstate.backup # Резервна копія файлу стану
-├── README.md               # Документація проєкту
-└── modules/                # Директорія з модулями
-    ├── s3-backend/         # Модуль для бекенду Terraform
-    │   ├── s3.tf           # Створення S3 бакета для зберігання стану
-    │   ├── dynamodb.tf     # Створення таблиці DynamoDB для блокувань
-    │   ├── variables.tf    # Змінні модуля
-    │   └── outputs.tf      # Вивід модуля
-    ├── vpc/                # Модуль мережевої інфраструктури
-    │   ├── vpc.tf          # Створення VPC, підмереж та Internet Gateway
-    │   ├── routes.tf       # Налаштування таблиць маршрутизації
-    │   ├── variables.tf    # Змінні модуля
-    │   └── outputs.tf      # Вивід модуля
-    └── ecr/                # Модуль для контейнерного реєстру
-        ├── ecr.tf          # Створення репозиторію ECR та політик
-        ├── variables.tf    # Змінні модуля
-        └── outputs.tf      # Вивід модуля
+lesson-7/
+│
+├── main.tf                  # Головний файл для підключення модулів
+├── backend.tf               # Налаштування бекенду для стейтів (S3 + DynamoDB
+├── outputs.tf               # Загальні виводи ресурсів
+│
+├── modules/                 # Каталог з усіма модулями
+│   ├── s3-backend/          # Модуль для S3 та DynamoDB
+│   │   ├── s3.tf            # Створення S3-бакета
+│   │   ├── dynamodb.tf      # Створення DynamoDB
+│   │   ├── variables.tf     # Змінні для S3
+│   │   └── outputs.tf       # Виведення інформації про S3 та DynamoDB
+│   │
+│   ├── vpc/                 # Модуль для VPC
+│   │   ├── vpc.tf           # Створення VPC, підмереж, Internet Gateway
+│   │   ├── routes.tf        # Налаштування маршрутизації
+│   │   ├── variables.tf     # Змінні для VPC
+│   │   └── outputs.tf
+│   ├── ecr/                 # Модуль для ECR
+│   │   ├── ecr.tf           # Створення ECR репозиторію
+│   │   ├── variables.tf     # Змінні для ECR
+│   │   └── outputs.tf       # Виведення URL репозиторію
+│   │
+│   ├── eks/                 # Модуль для Kubernetes кластера
+│   │   ├── eks.tf           # Створення кластера
+│   │   ├── variables.tf     # Змінні для EKS
+│   │   └── outputs.tf       # Виведення інформації про кластер
+│
+├── charts/
+│   └── django-app/
+│       ├── templates/
+│       │   ├── deployment.yaml
+│       │   ├── service.yaml
+│       │   ├── configmap.yaml
+│       │   └── hpa.yaml
+│       ├── Chart.yaml
+│       └── values.yaml     # ConfigMap зі змінними середовища
+
+
 ```
 
 ## Команди для роботи з проєктом
@@ -158,6 +175,66 @@ VPC забезпечує ізоляцію мережі та контроль н�
 **Навіщо потрібен:**
 ECR - це приватний реєстр Docker-образів від AWS
 
+### 4. Модуль `eks`
+
+**Призначення:** Створення керованого Kubernetes кластера (Amazon EKS) з групою worker nodes.
+
+**Що створює:**
+
+- **IAM-роль для EKS кластера** - роль з необхідними дозволами для управління кластером
+- **EKS Cluster** - керований Kubernetes кластер
+- **IAM-роль для Worker Nodes** - роль для EC2-інстансів (воркерів)
+- **Node Group** - група EC2-інстансів для запуску контейнерів
+  - Автоматичне масштабування (min/max/desired size)
+
+**Вхідні параметри:**
+
+- `cluster_name` - назва EKS кластера
+- `subnet_ids` - список ID підмереж для розгортання кластера
+- `instance_type` - тип EC2-інстансів для worker nodes (наприклад, "t3.small")
+- `desired_size` - бажана кількість worker nodes
+- `max_size` - максимальна кількість worker nodes
+- `min_size` - мінімальна кількість worker nodes
+
+**Вивід:**
+
+- `eks_cluster_endpoint` - API endpoint для підключення до кластера
+- `eks_cluster_name` - назва EKS кластера
+- `eks_node_role_arn` - ARN IAM-ролі для worker nodes
+
+**Навіщо потрібен:** EKS дозволяє запускати контейнеризовані додатки в керованому Kubernetes кластері.
+
+---
+
+## Helm Chart - Django App
+
+**Призначення:** Розгортання Django-додатку в Kubernetes кластері через Helm.
+
+**Що включає:**
+
+- **Deployment** - визначає, як запускати Django-додаток
+  - Автоматичне підтягування образу з ECR
+  - Використання ConfigMap для змінних оточення
+  - Налаштування ресурсів (CPU, Memory)
+- **Service** - забезпечує мережевий доступ до подів
+- **ConfigMap** - зберігає конфігурацію додатку
+  - Змінні оточення для PostgreSQL
+  - Змінні оточення для Django
+- **HorizontalPodAutoscaler** - автоматичне масштабування при навантаженні
+
+**Конфігурація (values.yaml):**
+
+- `image.repository` - URL ECR репозиторію (встановлюється Terraform автоматично)
+- `image.tag` - тег Docker-образу (за замовчуванням: latest)
+- `service.port` - порт сервісу (8000)
+- `hpa.minReplicas` / `hpa.maxReplicas` - мінімальна/максимальна кількість реплік
+- `config.*` - змінні оточення для Django
+
+**Інтеграція з Terraform:**
+Terraform автоматично розгортає цей Helm-чарт після створення EKS кластера, передаючи URL ECR репозиторію як параметр.
+
+---
+
 ## Налаштування
 
 У файлі `backend.tf` міститься закоментована конфігурація віддаленого бекенду. Після створення S3 бакета та DynamoDB таблиці за допомогою модуля `s3-backend`, розкоментуйте конфігурацію для використання віддаленого зберігання стану:
@@ -185,11 +262,22 @@ terraform init -migrate-state
 
 Після успішного застосування конфігурації, Terraform виведе наступну інформацію:
 
+**S3 Backend:**
+
 - `s3_bucket_name` - назва S3 бакета для зберігання стану
 - `dynamodb_table_name` - назва таблиці DynamoDB для блокувань
+
+**ECR:**
+
 - `ecr_repository_url` - URL для роботи з ECR репозиторієм
 - `ecr_repository_arn` - ARN ECR репозиторію
 - `ecr_repository_name` - ім'я ECR репозиторію
+
+**EKS:**
+
+- `eks_cluster_endpoint` - API endpoint для підключення до кластера
+- `eks_cluster_name` - назва EKS кластера
+- `eks_node_role_arn` - ARN IAM-ролі для worker nodes
 
 ## Додаткові команди
 
@@ -215,4 +303,125 @@ terraform fmt
 
 ```bash
 terraform validate
+```
+
+## Робота з EKS та Kubernetes
+
+### Налаштування kubectl для підключення до EKS
+
+Після створення EKS кластера, налаштуйте kubectl для підключення:
+
+```bash
+aws eks update-kubeconfig --region us-east-1 --name eks-cluster-demo --profile goithw
+```
+
+### Перевірка статусу кластера
+
+```bash
+kubectl cluster-info
+kubectl get nodes
+```
+
+### Перегляд розгорнутих ресурсів
+
+```bash
+# Переглянути деплойменти
+kubectl get deployments
+
+# Переглянути поди
+kubectl get pods
+
+# Переглянути сервіси
+kubectl get services
+
+# Переглянути HPA
+kubectl get hpa
+```
+
+### Перегляд логів Django-додатку
+
+```bash
+# Отримати назву пода
+kubectl get pods
+
+# Переглянути логи
+kubectl logs <pod-name>
+
+# Переглянути логи в реальному часі
+kubectl logs -f <pod-name>
+```
+
+### Робота з Helm
+
+```bash
+# Переглянути встановлені Helm релізи
+helm list
+
+# Оновити Helm чарт після змін
+helm upgrade django-app ./charts/django-app
+
+# Видалити Helm реліз
+helm uninstall django-app
+```
+
+### Масштабування додатку вручну
+
+```bash
+# Змінити кількість реплік
+kubectl scale deployment django-app --replicas=3
+
+# Переглянути статус HPA
+kubectl get hpa django-app
+```
+
+## Порядок розгортання проєкту
+
+1. **Ініціалізація Terraform:**
+
+   ```bash
+   terraform init
+   ```
+
+2. **Перегляд та застосування змін:**
+
+   ```bash
+   terraform plan
+   terraform apply
+   ```
+
+3. **Налаштування kubectl:**
+
+   ```bash
+   aws eks update-kubeconfig --region us-east-1 --name eks-cluster-demo --profile goithw
+   ```
+
+4. **Завантаження Docker-образу до ECR:**
+
+   # Перейти в проєкт з Dockerfile образу django-app
+
+   ```bash
+   # Отримати URL репозиторію
+   ECR_URL=$(terraform output -raw ecr_repository_url)
+
+   # Авторизація в ECR
+   aws ecr get-login-password --region us-east-1 --profile goithw | docker login --username AWS --password-stdin $ECR_URL
+
+   # Білд та push образу
+   docker build -t django-app .
+   docker tag django-app:latest $ECR_URL:latest
+   docker push $ECR_URL:latest
+   ```
+
+5. **Перевірка розгортання:**
+   ```bash
+   kubectl get all
+   kubectl get hpa
+   ```
+
+## Очищення ресурсів
+
+Для видалення всіх створених ресурсів:
+
+```bash
+terraform destroy
 ```
