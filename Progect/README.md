@@ -270,29 +270,41 @@ data "aws_eks_cluster" "eks" {
 data "aws_eks_cluster_auth" "eks" {
   name = module.eks.eks_cluster_name
 }
-
-resource "helm_release" "django_app" {
-  name       = "django-app"
-  chart      = "./charts/django-app"
-  namespace  = "default"
-
-  set {
-    name  = "image.repository"
-    value = module.ecr.ecr_repository_url
-  }
-
-  set {
-    name  = "image.tag"
-    value = "latest"
-  }
-
-  depends_on = [module.eks]
-}
 ```
 
-Після створення EKS за допомогою модуля `eks`, розкоментуйте конфігурацію для cтворення django-app:
+Та модулі jenkins і ArgoCD
 
-Після розкоментування виконайте:
+```
+#Підключаємо модуль Jenkins
+module "jenkins" {
+  source       = "./modules/jenkins"
+  cluster_name = module.eks.eks_cluster_name
+  jenkins_admin_password = var.jenkins_admin_password
+  github_username = var.github_username
+  github_pat = var.github_pat
+  github_url = var.github_url
+  github_main_branch = var.github_main_branch
+  oidc_provider_arn = module.eks.oidc_provider_arn
+  oidc_provider_url = module.eks.oidc_provider_url
+  providers = {
+    helm = helm
+  }
+}
+
+#Підключаємо модуль Argo CD
+module "argo_cd" {
+  source       = "./modules/argo_cd"
+  namespace    = "argocd"
+  chart_version = "5.46.4"
+  github_username = var.github_username
+  github_pat = var.github_pat
+  github_url = var.github_tf_url
+  github_main_branch = var.github_tf_branch
+}
+
+```
+
+Після створення EKS за допомогою модуля `eks`, розкоментуйте цю конфігурацію та виконайте:
 
 ```bash
 terraform init -migrate-state
@@ -436,24 +448,7 @@ kubectl get hpa django-app
    aws eks update-kubeconfig --region us-east-1 --name eks-cluster-demo --profile goithw
    ```
 
-4. **Завантаження Docker-образу до ECR:**
-
-   # Перейти в проєкт з Dockerfile образу django-app
-
-   ```bash
-   # Отримати URL репозиторію
-   ECR_URL=$(terraform output -raw ecr_repository_url)
-
-   # Авторизація в ECR
-   aws ecr get-login-password --region us-east-1 --profile goithw | docker login --username AWS --password-stdin $ECR_URL
-
-   # Білд та push образу
-   docker build -t django-app .
-   docker tag django-app:latest $ECR_URL:latest
-   docker push $ECR_URL:latest
-   ```
-
-5. **Перевірка розгортання:**
+4. **Перевірка розгортання:**
    ```bash
    kubectl get all
    kubectl get hpa

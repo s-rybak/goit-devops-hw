@@ -14,39 +14,27 @@ provider "aws" {
   profile = "goithw"
 }
 
-# provider "helm" {
-#   kubernetes {
-#     host                   = data.aws_eks_cluster.eks.endpoint
-#     cluster_ca_certificate = base64decode(data.aws_eks_cluster.eks.certificate_authority[0].data)
-#     token                  = data.aws_eks_cluster_auth.eks.token
-#   }
-# }
+provider "helm" {
+  kubernetes {
+    host                   = data.aws_eks_cluster.eks.endpoint
+    cluster_ca_certificate = base64decode(data.aws_eks_cluster.eks.certificate_authority[0].data)
+    token                  = data.aws_eks_cluster_auth.eks.token
+  }
+}
 
-# data "aws_eks_cluster" "eks" {
-#   name = module.eks.eks_cluster_name
-# }
+provider "kubernetes" {
+  host                   = data.aws_eks_cluster.eks.endpoint
+  cluster_ca_certificate = base64decode(data.aws_eks_cluster.eks.certificate_authority[0].data)
+  token                  = data.aws_eks_cluster_auth.eks.token
+}
 
-# data "aws_eks_cluster_auth" "eks" {
-#   name = module.eks.eks_cluster_name
-# }
+data "aws_eks_cluster" "eks" {
+  name = module.eks.eks_cluster_name
+}
 
-# resource "helm_release" "django_app" {
-#   name       = "django-app"
-#   chart      = "./charts/django-app"
-#   namespace  = "default"
-
-#   set {
-#     name  = "image.repository"
-#     value = module.ecr.ecr_repository_url
-#   }
-  
-#   set {
-#     name  = "image.tag"
-#     value = "latest"
-#   }
-
-#   depends_on = [module.eks]
-# }
+data "aws_eks_cluster_auth" "eks" {
+  name = module.eks.eks_cluster_name
+}
 
 # Підключаємо модуль S3 та DynamoDB
 module "s3_backend" {
@@ -77,8 +65,36 @@ module "eks" {
   source          = "./modules/eks"          
   cluster_name    = "eks-cluster-demo"            # Назва кластера
   subnet_ids      = module.vpc.public_subnets     # ID підмереж
-  instance_type   = "t3.small"                    # Тип інстансів
-  desired_size    = 1                             # Бажана кількість нодів
-  max_size        = 2                             # Максимальна кількість нодів
-  min_size        = 1                             # Мінімальна кількість нодів
+  instance_type   = "t3.medium"                    # Тип інстансів
+  desired_size    = 2                             # Бажана кількість нодів
+  max_size        = 3                             # Максимальна кількість нодів
+  min_size        = 2                             # Мінімальна кількість нодів
+}
+
+#Підключаємо модуль Jenkins
+module "jenkins" {
+  source       = "./modules/jenkins"
+  cluster_name = module.eks.eks_cluster_name
+  jenkins_admin_password = var.jenkins_admin_password
+  github_username = var.github_username
+  github_pat = var.github_pat
+  github_url = var.github_url
+  github_main_branch = var.github_main_branch
+  oidc_provider_arn = module.eks.oidc_provider_arn
+  oidc_provider_url = module.eks.oidc_provider_url
+  providers = {
+    helm = helm
+  }
+}
+
+#Підключаємо модуль Argo CD
+module "argo_cd" {
+  source       = "./modules/argo_cd"
+  namespace    = "argocd"
+  chart_version = "5.46.4"
+  github_username = var.github_username
+  github_pat = var.github_pat
+  github_url = var.github_tf_url
+  github_main_branch = var.github_tf_branch
+  helm_chart_path = var.helm_chart_path
 }

@@ -1,0 +1,8 @@
+jenkins_admin_password = "admin123"
+github_username        = "SerhiiRybak"
+github_pat             = "github_pat_....."
+github_url             = "https://github.com/s-rybak/goit-devops-testapp-hw"
+github_tf_url          = "https://github.com/s-rybak/goit-devops-hw/tree/lesson-7"
+github_tf_branch       = "lesson-7"
+github_main_branch     = "main"
+helm_chart_path        = "Progect/charts/django-app"
