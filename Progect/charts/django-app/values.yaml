@@ -1,7 +1,7 @@
 namespace: default
 
 image:
-  repository: default-repository-url # will be changed via terraform
+  repository: 767415906716.dkr.ecr.us-east-1.amazonaws.com/lesson-5-ecr
   tag: latest
   pullPolicy: IfNotPresent
 

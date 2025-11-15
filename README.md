@@ -436,7 +436,7 @@ spec:
 
 **Конфігурація (values.yaml):**
 
-- `image.repository` - URL ECR репозиторію (встановлюється Terraform автоматично)
+- `image.repository` - URL ECR репозиторію
 - `image.tag` - тег Docker-образу (за замовчуванням: latest)
 - `service.port` - порт сервісу (8000)
 - `hpa.minReplicas` / `hpa.maxReplicas` - мінімальна/максимальна кількість реплік
