@@ -1,14 +1,17 @@
-# Lesson 5 - Terraform Infrastructure with EKS
+# Lesson 8-9 - Terraform Infrastructure with EKS, Jenkins та ArgoCD
 
-Цей проєкт демонструє інфраструктуру AWS, розгорнуту за допомогою Terraform з використанням модульної архітектури. Включає створення Kubernetes кластера (EKS) та автоматичне розгортання Django-додатку за допомогою Helm.
+Цей проєкт демонструє інфраструктуру AWS, розгорнуту за допомогою Terraform з використанням модульної архітектури. Включає створення Kubernetes кластера (EKS), Jenkins для CI/CD, ArgoCD для GitOps та автоматичне розгортання Django-додатку.
 
 ## Структура проєкту
 
 ```
-lesson-7/
+Progect/
 │
 ├── main.tf                  # Головний файл для підключення модулів
-├── backend.tf               # Налаштування бекенду для стейтів (S3 + DynamoDB
+├── backend.tf               # Налаштування бекенду для стейтів (S3 + DynamoDB)
+├── variables.tf             # Змінні проєкту
+├── terraform.tfvars         # Значення змінних (створюється з .example)
+├── terraform.tfvars.example # Приклад файлу зі змінними
 ├── outputs.tf               # Загальні виводи ресурсів
 │
 ├── modules/                 # Каталог з усіма модулями
@@ -22,7 +25,8 @@ lesson-7/
 │   │   ├── vpc.tf           # Створення VPC, підмереж, Internet Gateway
 │   │   ├── routes.tf        # Налаштування маршрутизації
 │   │   ├── variables.tf     # Змінні для VPC
-│   │   └── outputs.tf
+│   │   └── outputs.tf       # Виведення інформації про VPC
+│   │
 │   ├── ecr/                 # Модуль для ECR
 │   │   ├── ecr.tf           # Створення ECR репозиторію
 │   │   ├── variables.tf     # Змінні для ECR
@@ -30,27 +34,81 @@ lesson-7/
 │   │
 │   ├── eks/                 # Модуль для Kubernetes кластера
 │   │   ├── eks.tf           # Створення кластера
+│   │   ├── node.tf          # Налаштування worker nodes
+│   │   ├── aws_ebs_csi_driver.tf  # EBS CSI драйвер
 │   │   ├── variables.tf     # Змінні для EKS
 │   │   └── outputs.tf       # Виведення інформації про кластер
+│   │
+│   ├── jenkins/             # Модуль для Jenkins
+│   │   ├── jenkins.tf       # Розгортання Jenkins через Helm
+│   │   ├── values.yaml      # Налаштування Jenkins
+│   │   ├── variables.tf     # Змінні для Jenkins
+│   │   ├── outputs.tf       # Виведення інформації про Jenkins
+│   │   └── providers.tf     # Провайдери для Jenkins
+│   │
+│   └── argo_cd/             # Модуль для ArgoCD
+│       ├── argo_cd.tf       # Розгортання ArgoCD через Helm
+│       ├── values.yaml      # Налаштування ArgoCD
+│       ├── variables.tf     # Змінні для ArgoCD
+│       ├── outputs.tf       # Виведення інформації про ArgoCD
+│       ├── providers.tf     # Провайдери для ArgoCD
+│       └── charts/          # Helm чарт для ArgoCD Application
+│           ├── Chart.yaml
+│           ├── values.yaml
+│           └── templates/
+│               ├── application.yaml
+│               └── repository.yaml
 │
-├── charts/
-│   └── django-app/
-│       ├── templates/
-│       │   ├── deployment.yaml
-│       │   ├── service.yaml
-│       │   ├── configmap.yaml
-│       │   └── hpa.yaml
-│       ├── Chart.yaml
-│       └── values.yaml     # ConfigMap зі змінними середовища
-
-
+└── charts/
+    └── django-app/          # Helm чарт для Django додатку
+        ├── templates/
+        │   ├── deployment.yaml
+        │   ├── service.yaml
+        │   ├── configmap.yaml
+        │   └── hpa.yaml
+        ├── Chart.yaml
+        └── values.yaml
 ```
+
+## Передумови
+
+Перед початком роботи переконайтесь, що у вас встановлено:
+
+- Terraform >= 1.0
+- AWS CLI налаштований з профілем `goithw`
+- kubectl
+- helm
+
+## Налаштування змінних
+
+Перед розгортанням інфраструктури необхідно створити файл зі змінними:
+
+1. Скопіюйте файл `terraform.tfvars.example` в `terraform.tfvars`:
+
+```bash
+cp terraform.tfvars.example terraform.tfvars
+```
+
+2. Відредагуйте `terraform.tfvars` і вкажіть свої значення:
+
+```hcl
+jenkins_admin_password = "your-secure-password"
+github_username        = "your-github-username"
+github_pat             = "github_pat_xxxxxxxxxxxxx"  # GitHub Personal Access Token
+github_url             = "https://github.com/s-rybak/goit-devops-testapp-hw"
+github_tf_url          = "https://github.com/your-username/your-repo/tree/your-branch"
+github_tf_branch       = "your-branch"
+github_main_branch     = "main"
+helm_chart_path        = "Progect/charts/django-app"
+```
+
+**Важливо:** GitHub Personal Access Token потрібен для доступу Jenkins та ArgoCD до репозиторіїв. Створіть токен з правами доступу до потрібних репозиторіїв з правами потрібними для коміту
 
 ## Команди для роботи з проєктом
 
 ### Ініціалізація Terraform
 
-Перед початком роботи необхідно ініціалізувати Terraform та завантажити необхідні провайдери:
+Після налаштування змінних, ініціалізуйте Terraform:
 
 ```bash
 terraform init
@@ -58,7 +116,7 @@ terraform init
 
 Ця команда:
 
-- Завантажує провайдер AWS
+- Завантажує провайдери AWS, Helm та Kubernetes
 - Ініціалізує модулі
 - Підготовлює робоче середовище
 
@@ -206,6 +264,160 @@ ECR - це приватний реєстр Docker-образів від AWS
 
 ---
 
+### 5. Модуль `jenkins`
+
+**Призначення:** Розгортання Jenkins в EKS кластері для CI/CD пайплайнів.
+
+**Що створює:**
+
+- **Kubernetes Namespace** - окремий namespace `jenkins` для ізоляції
+- **Storage Class** - EBS Storage Class для persistent storage
+- **IAM Role** - роль для ServiceAccount з доступом до ECR
+- **Kubernetes ServiceAccount** - сервісний акаунт з анотацією IAM ролі
+- **Helm Release** - розгортання Jenkins через офіційний Helm chart
+
+**Вхідні параметри:**
+
+- `cluster_name` - назва EKS кластера
+- `jenkins_admin_password` - пароль адміністратора Jenkins (якщо поточна версія jenkins дозволяє кастумний пароль, в іншому випадку буде згенеровано безпечний пароль, який можна дістати з сервіса кубернетіс)
+- `github_username` - ім'я користувача GitHub
+- `github_pat` - Personal Access Token для GitHub
+- `github_url` - URL репозиторію з тестовим додатком
+- `github_main_branch` - основна гілка репозиторію
+- `oidc_provider_arn` - ARN OIDC провайдера EKS
+- `oidc_provider_url` - URL OIDC провайдера EKS
+
+**Вивід:**
+
+- `jenkins_service_url` - URL для доступу до Jenkins UI
+- `jenkins_admin_user` - ім'я адміністратора
+- `jenkins_namespace` - namespace де розгорнуто Jenkins
+
+**Навіщо потрібен:** Jenkins забезпечує автоматизацію CI/CD процесів - збірку, тестування та публікацію Docker образів в ECR.
+
+**Тестовий проект:** https://github.com/s-rybak/goit-devops-testapp-hw  
+В цьому репозиторії знаходиться Django додаток та `Jenkinsfile` з описом пайплайну.
+
+Jenkinsfile:
+
+```
+pipeline {
+  agent {
+    kubernetes {
+      yaml """
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    some-label: jenkins-kaniko
+spec:
+  serviceAccountName: jenkins-sa
+  containers:
+    - name: kaniko
+      image: gcr.io/kaniko-project/executor:v1.16.0-debug
+      imagePullPolicy: Always
+      command:
+        - sleep
+      args:
+        - 99d
+    - name: git
+      image: alpine/git
+      command:
+        - sleep
+      args:
+        - 99d
+"""
+    }
+  }
+
+  environment {
+    ECR_REGISTRY = "767415906716.dkr.ecr.us-east-1.amazonaws.com"
+    IMAGE_NAME   = "lesson-5-ecr"
+    IMAGE_TAG    = "v1.0.${BUILD_NUMBER}"
+
+    COMMIT_EMAIL = "jenkins@localhost"
+    COMMIT_NAME  = "jenkins"
+    GIT_REPO_URL = "github.com/s-rybak/goit-devops-hw/"
+  }
+
+  stages {
+    stage('Build & Push Docker Image') {
+      steps {
+        container('kaniko') {
+          sh '''
+            /kaniko/executor \\
+              --context `pwd`/docker/django \\
+              --dockerfile `pwd`/docker/django/Dockerfile \\
+              --destination=$ECR_REGISTRY/$IMAGE_NAME:$IMAGE_TAG \\
+              --cache=true \\
+              --insecure \\
+              --skip-tls-verify
+          '''
+        }
+      }
+    }
+
+    stage('Update Chart Tag in Git') {
+      steps {
+        container('git') {
+          withCredentials([usernamePassword(credentialsId: 'github-token', usernameVariable: 'GIT_USERNAME', passwordVariable: 'GIT_PAT')]) {
+            sh '''
+              git clone https://$GIT_USERNAME:$GIT_PAT@$GIT_REPO_URL
+              cd goit-devops-hw
+              git config --global --add safe.directory /home/jenkins/agent/workspace/goit-django-docker
+              git checkout lesson-8-9
+              cd Progect/charts/django-app
+
+              sed -i "s/tag: .*/tag: $IMAGE_TAG/" values.yaml
+
+              git config user.email "$COMMIT_EMAIL"
+              git config user.name "$COMMIT_NAME"
+
+              git add values.yaml
+              git commit -m "Update image tag to $IMAGE_TAG"
+              git push origin lesson-8-9
+            '''
+          }
+        }
+      }
+    }
+  }
+}
+
+```
+
+---
+
+### 6. Модуль `argo_cd`
+
+**Призначення:** Розгортання ArgoCD для GitOps-підходу в управлінні Kubernetes ресурсами.
+
+**Що створює:**
+
+- **ArgoCD Helm Release** - основний компонент ArgoCD
+- **ArgoCD Application** - налаштування автоматичного розгортання Django додатку
+- **Git Repository** - підключення до Git репозиторію з Helm чартами
+
+**Вхідні параметри:**
+
+- `namespace` - namespace для ArgoCD (за замовчуванням: argocd)
+- `chart_version` - версія Helm чарту ArgoCD
+- `github_username` - ім'я користувача GitHub
+- `github_pat` - Personal Access Token для GitHub
+- `github_url` - URL репозиторію з Helm чартами
+- `github_main_branch` - гілка для відстеження
+- `helm_chart_path` - шлях до Helm чарту в репозиторії
+
+**Вивід:**
+
+- `argocd_server_url` - URL для доступу до ArgoCD UI
+- `argocd_admin_password` - пароль адміністратора ArgoCD
+- `argocd_namespace` - namespace де розгорнуто ArgoCD
+
+**Навіщо потрібен:** ArgoCD забезпечує декларативне управління Kubernetes ресурсами через Git репозиторій (GitOps), автоматично синхронізуючи стан кластера з репозиторієм.
+
+---
+
 ## Helm Chart - Django App
 
 **Призначення:** Розгортання Django-додатку в Kubernetes кластері через Helm.
@@ -230,8 +442,8 @@ ECR - це приватний реєстр Docker-образів від AWS
 - `hpa.minReplicas` / `hpa.maxReplicas` - мінімальна/максимальна кількість реплік
 - `config.*` - змінні оточення для Django
 
-**Інтеграція з Terraform:**
-Terraform автоматично розгортає цей Helm-чарт після створення EKS кластера, передаючи URL ECR репозиторію як параметр.
+**Інтеграція з GitOps:**
+ArgoCD автоматично розгортає цей Helm-чарт після синхронізації з Git репозиторієм, відстежуючи зміни у файлі `values.yaml`.
 
 ---
 
@@ -243,7 +455,7 @@ Terraform автоматично розгортає цей Helm-чарт піс�
 terraform {
   backend "s3" {
     bucket         = "terraform-state-bucket-goithw-rybak"
-    key            = "lesson-5/terraform.tfstate"
+    key            = "Progect/terraform.tfstate"
     region         = "us-east-1"
     dynamodb_table = "terraform-locks"
     encrypt        = true
@@ -270,29 +482,41 @@ data "aws_eks_cluster" "eks" {
 data "aws_eks_cluster_auth" "eks" {
   name = module.eks.eks_cluster_name
 }
-
-resource "helm_release" "django_app" {
-  name       = "django-app"
-  chart      = "./charts/django-app"
-  namespace  = "default"
-
-  set {
-    name  = "image.repository"
-    value = module.ecr.ecr_repository_url
-  }
-
-  set {
-    name  = "image.tag"
-    value = "latest"
-  }
-
-  depends_on = [module.eks]
-}
 ```
 
-Після створення EKS за допомогою модуля `eks`, розкоментуйте конфігурацію для cтворення django-app:
+Та модулі jenkins і ArgoCD
 
-Після розкоментування виконайте:
+```
+#Підключаємо модуль Jenkins
+module "jenkins" {
+  source       = "./modules/jenkins"
+  cluster_name = module.eks.eks_cluster_name
+  jenkins_admin_password = var.jenkins_admin_password
+  github_username = var.github_username
+  github_pat = var.github_pat
+  github_url = var.github_url
+  github_main_branch = var.github_main_branch
+  oidc_provider_arn = module.eks.oidc_provider_arn
+  oidc_provider_url = module.eks.oidc_provider_url
+  providers = {
+    helm = helm
+  }
+}
+
+#Підключаємо модуль Argo CD
+module "argo_cd" {
+  source       = "./modules/argo_cd"
+  namespace    = "argocd"
+  chart_version = "5.46.4"
+  github_username = var.github_username
+  github_pat = var.github_pat
+  github_url = var.github_tf_url
+  github_main_branch = var.github_tf_branch
+}
+
+```
+
+Після створення EKS за допомогою модуля `eks`, розкоментуйте цю конфігурацію та виконайте:
 
 ```bash
 terraform init -migrate-state
@@ -308,6 +532,12 @@ terraform apply
 - `s3_bucket_name` - назва S3 бакета для зберігання стану
 - `dynamodb_table_name` - назва таблиці DynamoDB для блокувань
 
+**VPC:**
+
+- `vpc_id` - ID створеної VPC
+- `public_subnets` - список ID публічних підмереж
+- `private_subnets` - список ID приватних підмереж
+
 **ECR:**
 
 - `ecr_repository_url` - URL для роботи з ECR репозиторієм
@@ -319,6 +549,19 @@ terraform apply
 - `eks_cluster_endpoint` - API endpoint для підключення до кластера
 - `eks_cluster_name` - назва EKS кластера
 - `eks_node_role_arn` - ARN IAM-ролі для worker nodes
+- `oidc_provider_arn` - ARN OIDC провайдера
+
+**Jenkins:**
+
+- `jenkins_service_url` - URL для доступу до Jenkins UI
+- `jenkins_admin_user` - ім'я адміністратора (за замовчуванням: admin)
+- `jenkins_namespace` - namespace Jenkins
+
+**ArgoCD:**
+
+- `argocd_server_url` - URL для доступу до ArgoCD UI
+- `argocd_admin_password` - початковий пароль адміністратора
+- `argocd_namespace` - namespace ArgoCD
 
 ## Додаткові команди
 
@@ -395,14 +638,14 @@ kubectl logs -f <pod-name>
 ### Робота з Helm
 
 ```bash
-# Переглянути встановлені Helm релізи
-helm list
+# Переглянути встановлені Helm релізи (в усіх namespace)
+helm list -A
 
-# Оновити Helm чарт після змін
-helm upgrade django-app ./charts/django-app
+# Переглянути релізи Jenkins
+helm list -n jenkins
 
-# Видалити Helm реліз
-helm uninstall django-app
+# Переглянути релізи ArgoCD
+helm list -n argocd
 ```
 
 ### Масштабування додатку вручну
@@ -415,49 +658,226 @@ kubectl scale deployment django-app --replicas=3
 kubectl get hpa django-app
 ```
 
+---
+
+## Робота з Jenkins
+
+### Доступ до Jenkins UI
+
+Після розгортання, отримайте URL Jenkins:
+
+```bash
+kubectl get svc -n jenkins
+```
+
+**Логін:**
+
+- Username: `admin`
+- Password: значення з `terraform.tfvars` (змінна `jenkins_admin_password`) Або, якщо версія не дозволяє кастумні пароль, можна дізнатись пароль виконавши наступну команду `kubectl get secret jenkins -n jenkins -o jsonpath="{.data.jenkins-admin-password}" | base64 --decode`
+
+### Налаштування Jenkins Pipeline
+
+1. **Зайдіть в Jenkins UI** (http://localhost:8080)
+
+2. **Апрувте скрипт в Jenkins Security:**
+
+   - Перейдіть в `Manage Jenkins` → `In-process Script Approval`
+   - Затвердіть скрипт, що очікує апруву (`seed-job`)
+
+Після чого створиться пайплайн. Джоба під назвою `goit-django-docker`
+
+**Примітка:** Jenkinsfile знаходиться в репозиторії https://github.com/s-rybak/goit-devops-testapp-hw його код можна побачити вище в цьому файлі
+
+### Перегляд логів Jenkins
+
+```bash
+# Логи Jenkins пода
+kubectl logs -n jenkins -l app.kubernetes.io/component=jenkins-controller -f
+
+# Переглянути всі поди в namespace jenkins
+kubectl get pods -n jenkins
+```
+
+---
+
+## Робота з ArgoCD
+
+### Доступ до ArgoCD UI
+
+Отримайте URL ArgoCD:
+
+```bash
+kubectl get svc -n argocd
+```
+
+**Логін:**
+
+- Username: `admin`
+- Password: отримайте з команди:
+
+```bash
+kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
+```
+
+### Перегляд Applications в ArgoCD
+
+```bash
+# Переглянути всі ArgoCD додатки
+kubectl get applications -n argocd
+
+# Детальна інформація про додаток
+kubectl describe application example-app  -n argocd
+```
+
+### Синхронізація додатку
+
+ArgoCD автоматично відстежує зміни в Git репозиторії
+
+### Перегляд логів ArgoCD
+
+```bash
+# Логи ArgoCD сервера
+kubectl logs -n argocd -l app.kubernetes.io/name=argocd-server -f
+
+# Логи Application Controller
+kubectl logs -n argocd -l app.kubernetes.io/name=argocd-application-controller -f
+```
+
 ## Порядок розгортання проєкту
 
-1. **Ініціалізація Terraform:**
+### Крок 1: Підготовка змінних
 
-   ```bash
-   terraform init
-   ```
+```bash
+# Скопіюйте файл з прикладом змінних
+cp terraform.tfvars.example terraform.tfvars
 
-2. **Перегляд та застосування змін:**
+# Відредагуйте terraform.tfvars та вкажіть ваші значення
+```
 
-   ```bash
-   terraform plan
-   terraform apply
-   ```
+### Крок 2: Ініціалізація та розгортання інфраструктури
 
-3. **Налаштування kubectl:**
+```bash
+# Ініціалізація Terraform
+terraform init
 
-   ```bash
-   aws eks update-kubeconfig --region us-east-1 --name eks-cluster-demo --profile goithw
-   ```
+# Перегляд змін
+terraform plan
 
-4. **Завантаження Docker-образу до ECR:**
+# Застосування змін (створення інфраструктури)
+terraform apply
+```
 
-   # Перейти в проєкт з Dockerfile образу django-app
+**Що буде створено:**
 
-   ```bash
-   # Отримати URL репозиторію
-   ECR_URL=$(terraform output -raw ecr_repository_url)
+- VPC з підмережами
+- ECR репозиторій
+- EKS кластер з worker nodes
 
-   # Авторизація в ECR
-   aws ecr get-login-password --region us-east-1 --profile goithw | docker login --username AWS --password-stdin $ECR_URL
+### Крок 3: Налаштування kubectl
 
-   # Білд та push образу
-   docker build -t django-app .
-   docker tag django-app:latest $ECR_URL:latest
-   docker push $ECR_URL:latest
-   ```
+```bash
+# Налаштування kubectl для підключення до EKS
+aws eks update-kubeconfig --region us-east-1 --name eks-cluster-demo --profile <profile>
 
-5. **Перевірка розгортання:**
-   ```bash
-   kubectl get all
-   kubectl get hpa
-   ```
+# Перевірка підключення
+kubectl cluster-info
+kubectl get nodes
+```
+
+Розкоментуйте в `main.tf` блоки:
+
+```bash
+provider "helm" {
+  kubernetes {
+    host                   = data.aws_eks_cluster.eks.endpoint
+    cluster_ca_certificate = base64decode(data.aws_eks_cluster.eks.certificate_authority[0].data)
+    token                  = data.aws_eks_cluster_auth.eks.token
+  }
+}
+
+provider "kubernetes" {
+  host                   = data.aws_eks_cluster.eks.endpoint
+  cluster_ca_certificate = base64decode(data.aws_eks_cluster.eks.certificate_authority[0].data)
+  token                  = data.aws_eks_cluster_auth.eks.token
+}
+
+data "aws_eks_cluster" "eks" {
+  name = module.eks.eks_cluster_name
+}
+
+data "aws_eks_cluster_auth" "eks" {
+  name = module.eks.eks_cluster_name
+}
+```
+
+та модулі `jenkins` і `argo_cd`
+
+```bash
+
+#Підключаємо модуль Jenkins
+module "jenkins" {
+  source       = "./modules/jenkins"
+  cluster_name = module.eks.eks_cluster_name
+  jenkins_admin_password = var.jenkins_admin_password
+  github_username = var.github_username
+  github_pat = var.github_pat
+  github_url = var.github_url
+  github_main_branch = var.github_main_branch
+  oidc_provider_arn = module.eks.oidc_provider_arn
+  oidc_provider_url = module.eks.oidc_provider_url
+  providers = {
+    helm = helm
+  }
+}
+
+#Підключаємо модуль Argo CD
+module "argo_cd" {
+  source       = "./modules/argo_cd"
+  namespace    = "argocd"
+  chart_version = "5.46.4"
+  github_username = var.github_username
+  github_pat = var.github_pat
+  github_url = var.github_tf_url
+  github_main_branch = var.github_tf_branch
+  helm_chart_path = var.helm_chart_path
+}
+```
+
+### Крок 4: Ініціалізація та розгортання `jenkins` + `argo_cd`
+
+```bash
+# Застосування змін
+terraform apply
+```
+
+Після чого можна починати користуватись інфраструктурою як описано вище. Для початку потрібно налаштувати `jenkins`
+
+## Тестування CI/CD Pipeline
+
+1. **Внесіть зміни в тестовий проект:**
+
+   - Для прикладу: https://github.com/s-rybak/goit-devops-testapp-hw
+   - Зробіть commit і push змін
+
+2. **Запустіть Jenkins Job:**
+
+   - Jenkins побудує Docker образ
+   - Завантажить образ в ECR
+   - Оновить тег в Git репозиторії з Helm чартом
+
+3. **ArgoCD автоматично синхронізує:**
+   - ArgoCD виявить зміни в Git репозиторії
+   - Автоматично оновить Django додаток в кластері
+
+### Повний цикл CI/CD
+
+```
+1. Developer → Push code to GitHub (goit-devops-testapp-hw)
+2. Jenkins → Build Docker image → Push to ECR
+3. Jenkins → Update Helm chart values in Git
+4. ArgoCD → Detect changes → Deploy to EKS
+5. Kubernetes → Running Django application
+```
 
 ## Очищення ресурсів
 
