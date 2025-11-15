@@ -1,4 +1,4 @@
-# Lesson 8-9 - Terraform Infrastructure with EKS, Jenkins та ArgoCD
+# Lesson db module - Terraform Infrastructure with EKS, Jenkins та ArgoCD
 
 Цей проєкт демонструє інфраструктуру AWS, розгорнуту за допомогою Terraform з використанням модульної архітектури. Включає створення Kubernetes кластера (EKS), Jenkins для CI/CD, ArgoCD для GitOps та автоматичне розгортання Django-додатку.
 
