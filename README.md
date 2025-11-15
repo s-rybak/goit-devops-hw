@@ -39,6 +39,13 @@ Progect/
 │   │   ├── variables.tf     # Змінні для EKS
 │   │   └── outputs.tf       # Виведення інформації про кластер
 │   │
+│   ├── rds/                 # Модуль для RDS/Aurora баз даних
+│   │   ├── rds.tf           # RDS інстанс
+│   │   ├── aurora.tf        # Aurora кластер (writer + readers)
+│   │   ├── shared.tf        # Спільні ресурси (subnet group, security group)
+│   │   ├── variables.tf     # Змінні для RDS/Aurora
+│   │   └── outputs.tf       # Виведення інформації про RDS
+│   │
 │   ├── jenkins/             # Модуль для Jenkins
 │   │   ├── jenkins.tf       # Розгортання Jenkins через Helm
 │   │   ├── values.yaml      # Налаштування Jenkins
@@ -264,7 +271,109 @@ ECR - це приватний реєстр Docker-образів від AWS
 
 ---
 
-### 5. Модуль `jenkins`
+### 5. Модуль `rds`
+
+**Призначення:** Створення бази даних в AWS RDS: RDS інстанс або Aurora кластер (PostgreSQL).
+
+**Що створює:**
+
+- **RDS інстанс** (`aws_db_instance.standard`) – одноінстансна БД у вибраному engine (PostgreSQL за замовчуванням).
+- **Aurora кластер** (`aws_rds_cluster.aurora`, `aws_rds_cluster_instance.*`) – кластер з одним writer та декількома read-only replica.
+- **DB Subnet Group** (`aws_db_subnet_group.default`) – група приватних або публічних підмереж для розміщення БД.
+- **Security Group** (`aws_security_group.rds`) – мережеві правила доступу до БД.
+
+**Вхідні параметри (змінні модуля):**
+
+- **`name`** – базова назва для інстансу/кластера.
+- **`use_aurora`** – якщо `true`, створюється Aurora кластер; якщо `false`, RDS інстанс.
+- **`engine`** – engine для стандартного RDS (використовується тільки при `use_aurora = false`).
+- **`engine_version`** – версія engine для стандартного RDS (наприклад, `"14.7"`, `"17.2"`).
+- **`engine_cluster`** – engine для Aurora кластера (використовується тільки при `use_aurora = true`).
+- **`engine_version_cluster`** – версія engine для Aurora кластера.
+- **`parameter_group_family_rds`** – тип параметр-групи, який має відповідати версії бази для rds.
+- **`parameter_group_family_aurora`** – тип параметр-групи, який має відповідати версії бази для Aurora.
+- **`aurora_replica_count`** – кількість read-only реплік Aurora.
+- **`instance_class`** – клас інстансу для RDS/Aurora (наприклад, `"db.t3.small"`, `"db.r6g.large"`).
+- **`allocated_storage`** – розмір диску в GiB для стандартного RDS (на Aurora не впливає).
+- **`db_name`** – назва бази даних, яка буде створена.
+- **`username`** – ім'я master-користувача БД.
+- **`password`** – пароль master-користувача.
+- **`vpc_id`** – ID VPC, в якій створюється security group.
+- **`subnet_private_ids`** – ID приватних підмереж для розміщення БД.
+- **`subnet_public_ids`** – ID публічних підмереж, якщо БД має бути публічно доступною.
+- **`publicly_accessible`** – якщо `true`, інстанси/кластер будуть доступні з інтернету.
+- **`multi_az`** – ввімкнення Multi-AZ для стандартного RDS.
+- **`backup_retention_period`** – кількість днів зберігання автоматичних бекапів (наприклад, `"7"`).
+- **`parameters`** – додаткові параметри БД для parameter group.
+- **`tags`** – додаткові AWS теги, які застосовуються до всіх ресурсів модуля.
+
+**Вивід:**
+
+- **`db_endpoint`** – endpoint створеної БД ( Aurora або RDS інстансу).
+- **`db_security_group_id`** – ID security group, яка використовується для доступу до БД.
+
+**Приклад використання модуля:**
+
+```hcl
+module "rds" {
+  source = "./modules/rds"
+
+  name                       = "myapp-db"
+  use_aurora                 = false  # true -> Aurora кластер, false -> стандартний RDS
+
+  # --- Aurora-only ---
+  engine_cluster             = "aurora-postgresql"
+  engine_version_cluster     = "15.3"
+  parameter_group_family_aurora = "aurora-postgresql15"
+  aurora_replica_count       = 2
+
+  # --- RDS-only ---
+  engine                     = "postgres"
+  engine_version             = "17.2"
+  parameter_group_family_rds = "postgres17"
+
+  # Common
+  instance_class             = "db.t3.medium"
+  allocated_storage          = 20
+  db_name                    = "myapp"
+  username                   = "postgres"
+  password                   = "admin123AWS23"
+  subnet_private_ids         = module.vpc.private_subnets
+  subnet_public_ids          = module.vpc.public_subnets
+  publicly_accessible        = true
+  vpc_id                     = module.vpc.vpc_id
+  multi_az                   = true
+  backup_retention_period    = 7
+  parameters = {
+    max_connections              = "200"
+    log_min_duration_statement   = "500"
+  }
+
+  tags = {
+    Environment = "dev"
+    Project     = "myapp"
+  }
+}
+```
+
+**Як змінити тип БД, engine та клас інстансу:**
+
+- **Перехід між стандартним RDS та Aurora:**
+  - Стандартний RDS: `use_aurora = false`, налаштовуєте `engine`, `engine_version`, `parameter_group_family_rds`.
+  - Aurora кластер: `use_aurora = true`, налаштовуєте `engine_cluster`, `engine_version_cluster`, `parameter_group_family_aurora`, `aurora_replica_count` (кількість read-реплік).
+- **Зміна engine / версії:**
+  - Для стандартного RDS – змінюєте `engine` (наприклад, `"postgres"`, `"mysql"`) та `engine_version`, і підбираєте відповідний `parameter_group_family_rds`.
+  - Для Aurora – змінюєте `engine_cluster` (наприклад, `"aurora-postgresql"`, `"aurora-mysql"`) та `engine_version_cluster`, і відповідно `parameter_group_family_aurora`.
+- **Зміна класу інстансу:**
+  - Оновлюєте `instance_class` (наприклад, `"db.t3.small"`, `"db.t3.large"`, `"db.r6g.large"`); ця змінна застосовується і до стандартного RDS, і до інстансів Aurora.
+- **Налаштування доступності та мережі:**
+  - `multi_az = true` для високої доступності стандартного RDS.
+  - `publicly_accessible` разом з вибором `subnet_private_ids`/`subnet_public_ids` визначають, чи буде БД доступна з інтернету.
+  - За потреби порт і дозволені CIDR для доступу можна змінити в ресурсі `aws_security_group.rds` (за замовчуванням відкритий порт 5432 TCP для всіх `0.0.0.0/0`).
+
+---
+
+### 6. Модуль `jenkins`
 
 **Призначення:** Розгортання Jenkins в EKS кластері для CI/CD пайплайнів.
 
@@ -388,7 +497,7 @@ spec:
 
 ---
 
-### 6. Модуль `argo_cd`
+### 7. Модуль `argo_cd`
 
 **Призначення:** Розгортання ArgoCD для GitOps-підходу в управлінні Kubernetes ресурсами.
 
@@ -550,6 +659,11 @@ terraform apply
 - `eks_cluster_name` - назва EKS кластера
 - `eks_node_role_arn` - ARN IAM-ролі для worker nodes
 - `oidc_provider_arn` - ARN OIDC провайдера
+
+**RDS:**
+
+- `db_endpoint` - endpoint створеної бази даних (Aurora або стандартний RDS).
+- `db_security_group_id` - ID security group, через яку відбувається доступ до БД.
 
 **Jenkins:**
 

@@ -16,10 +16,6 @@ variable "aurora_replica_count" {
   default = 1
 }
 
-variable "aurora_instance_count" {
-  type    = number
-  default = 2 # 1 primary + 1 replica
-}
 variable "engine_version" {
   type        = string
   default     = "14.7"
