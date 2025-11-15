@@ -2,7 +2,7 @@ namespace: default
 
 image:
   repository: default-repository-url # will be changed via terraform
-  tag: latest
+  tag: v1.0.11
   pullPolicy: IfNotPresent
 
 service:
