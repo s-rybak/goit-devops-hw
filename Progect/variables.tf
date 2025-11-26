@@ -41,3 +41,9 @@ variable "helm_chart_path" {
   type        = string
   default     = "Progect/charts/django-app"
 }
+
+variable "grafana_admin_password" {
+  description = "Grafana admin password"
+  type        = string
+  sensitive   = true
+}

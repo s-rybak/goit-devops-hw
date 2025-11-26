@@ -100,42 +100,65 @@ module "eks" {
 # }
 
 #Підключаємо модуль RDS
-module "rds" {
-  source = "./modules/rds"
+# module "rds" {
+#   source = "./modules/rds"
 
-  name                       = "myapp-db"
-  use_aurora                 = false
+#   name                       = "myapp-db"
+#   use_aurora                 = false
 
-  # --- Aurora-only ---
-  engine_cluster             = "aurora-postgresql"
-  engine_version_cluster     = "15.3"
-  parameter_group_family_aurora = "aurora-postgresql15"
-  aurora_replica_count       = 2
+#   # --- Aurora-only ---
+#   engine_cluster             = "aurora-postgresql"
+#   engine_version_cluster     = "15.3"
+#   parameter_group_family_aurora = "aurora-postgresql15"
+#   aurora_replica_count       = 2
 
-  # --- RDS-only ---
-  engine                     = "postgres"
-  engine_version             = "17.2"
-  parameter_group_family_rds = "postgres17"
+#   # --- RDS-only ---
+#   engine                     = "postgres"
+#   engine_version             = "17.2"
+#   parameter_group_family_rds = "postgres17"
 
-  # Common
-  instance_class             = "db.t3.medium"
-  allocated_storage          = 20
-  db_name                    = "myapp"
-  username                   = "postgres"
-  password                   = "admin123AWS23"
-  subnet_private_ids         = module.vpc.private_subnets
-  subnet_public_ids          = module.vpc.public_subnets
-  publicly_accessible        = true
-  vpc_id                     = module.vpc.vpc_id
-  multi_az                   = true
-  backup_retention_period    = 7
-  parameters = {
-    max_connections              = "200"
-    log_min_duration_statement   = "500"
-  }
+#   # Common
+#   instance_class             = "db.t3.medium"
+#   allocated_storage          = 20
+#   db_name                    = "myapp"
+#   username                   = "postgres"
+#   password                   = "admin123AWS23"
+#   subnet_private_ids         = module.vpc.private_subnets
+#   subnet_public_ids          = module.vpc.public_subnets
+#   publicly_accessible        = true
+#   vpc_id                     = module.vpc.vpc_id
+#   multi_az                   = true
+#   backup_retention_period    = 7
+#   parameters = {
+#     max_connections              = "200"
+#     log_min_duration_statement   = "500"
+#   }
 
-  tags = {
-    Environment = "dev"
-    Project     = "myapp"
-  }
-}
+#   tags = {
+#     Environment = "dev"
+#     Project     = "myapp"
+#   }
+# }
+
+#Підключаємо модуль Prometheus
+# module "prometheus" {
+#   source        = "./modules/prometheus"
+#   namespace     = "prometheus"
+#   chart_version = "25.8.0"
+#   providers = {
+#     helm = helm
+#   }
+# }
+
+#Підключаємо модуль Grafana
+# module "grafana" {
+#   source       = "./modules/grafana"
+#   namespace    = "grafana"
+#   chart_version = "7.0.0"
+#   grafana_admin_password = var.grafana_admin_password
+#   prometheus_url = module.prometheus.prometheus_server_url
+#   providers = {
+#     helm = helm
+#   }
+#   depends_on = [module.prometheus]
+# }
