@@ -82,7 +82,7 @@ controller:
                                 branches("${github_main_branch}")
                               }
                             }
-                            scriptPath("Jenkinsfile")
+                            scriptPath("Project/Django/Jenkinsfile")
                           }
                         }
                       }

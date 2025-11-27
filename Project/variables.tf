@@ -47,3 +47,19 @@ variable "grafana_admin_password" {
   type        = string
   sensitive   = true
 }
+
+variable "rds_db_password" {
+  description = "RDS database password"
+  type        = string
+  sensitive   = true
+}
+
+variable "rds_db_user" {
+  description = "RDS database user"
+  type        = string
+}
+
+variable "rds_db_name" {
+  description = "RDS database name"
+  type        = string
+}

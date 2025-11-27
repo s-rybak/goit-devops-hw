@@ -26,6 +26,8 @@ spec:
               cpu: 500m
               memory: 512Mi
           envFrom:
-            - configMapRef:
-                name: {{ .Release.Name }}-config
+            - secretRef:
+                name: rds-credentials
+            # - configMapRef:
+            #     name: {{ .Release.Name }}-config
 
