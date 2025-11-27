@@ -2,7 +2,7 @@ namespace: default
 
 image:
   repository: 767415906716.dkr.ecr.us-east-1.amazonaws.com/lesson-5-ecr
-  tag: v1.0.2
+  tag: v1.0.3
   pullPolicy: IfNotPresent
 
 service:
