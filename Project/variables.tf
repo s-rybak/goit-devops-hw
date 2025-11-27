@@ -39,7 +39,7 @@ variable "github_main_branch" {
 variable "helm_chart_path" {
   description = "Шлях до Helm чарта"
   type        = string
-  default     = "Progect/charts/django-app"
+  default     = "Project/charts/django-app"
 }
 
 variable "grafana_admin_password" {

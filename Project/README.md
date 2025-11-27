@@ -5,7 +5,7 @@
 ## Структура проєкту
 
 ```
-Progect/
+Project/
 │
 ├── main.tf                  # Головний файл для підключення модулів
 ├── backend.tf               # Налаштування бекенду для стейтів (S3 + DynamoDB)
@@ -106,7 +106,7 @@ github_url             = "https://github.com/s-rybak/goit-devops-testapp-hw"
 github_tf_url          = "https://github.com/your-username/your-repo/tree/your-branch"
 github_tf_branch       = "your-branch"
 github_main_branch     = "main"
-helm_chart_path        = "Progect/charts/django-app"
+helm_chart_path        = "Project/charts/django-app"
 ```
 
 **Важливо:** GitHub Personal Access Token потрібен для доступу Jenkins та ArgoCD до репозиторіїв. Створіть токен з правами доступу до потрібних репозиторіїв з правами потрібними для коміту
@@ -475,7 +475,7 @@ spec:
               cd goit-devops-hw
               git config --global --add safe.directory /home/jenkins/agent/workspace/goit-django-docker
               git checkout lesson-8-9
-              cd Progect/charts/django-app
+              cd Project/charts/django-app
 
               sed -i "s/tag: .*/tag: $IMAGE_TAG/" values.yaml
 
@@ -564,7 +564,7 @@ ArgoCD автоматично розгортає цей Helm-чарт після
 terraform {
   backend "s3" {
     bucket         = "terraform-state-bucket-goithw-rybak"
-    key            = "Progect/terraform.tfstate"
+    key            = "Project/terraform.tfstate"
     region         = "us-east-1"
     dynamodb_table = "terraform-locks"
     encrypt        = true

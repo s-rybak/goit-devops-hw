@@ -2,7 +2,7 @@
 # terraform {
 #   backend "s3" {
 #     bucket         = "terraform-state-bucket-goithw-rybak" # Назва S3-бакета
-#     key            = "Progect/terraform.tfstate"   # Шлях до файлу стейту
+#     key            = "Project/terraform.tfstate"   # Шлях до файлу стейту
 #     region         = "us-east-1"                    # Регіон AWS
 #     dynamodb_table = "terraform-locks"              # Назва таблиці DynamoDB
 #     encrypt        = true                           # Шифрування файлу стейту
