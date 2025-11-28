@@ -1,6 +1,6 @@
-# Lesson db module - Terraform Infrastructure with EKS, Jenkins та ArgoCD
+# DevOps Final Project - Terraform Infrastructure з VPC, EKS, RDS, ECR, Jenkins, Argo CD, Prometheus, Grafana
 
-Цей проєкт демонструє інфраструктуру AWS, розгорнуту за допомогою Terraform з використанням модульної архітектури. Включає створення Kubernetes кластера (EKS), Jenkins для CI/CD, ArgoCD для GitOps та автоматичне розгортання Django-додатку.
+Цей проєкт демонструє інфраструктуру AWS, розгорнуту за допомогою Terraform з використанням модульної архітектури. Включає створення Kubernetes кластера (EKS), Jenkins для CI/CD, ArgoCD для GitOps, моніторинг через Prometheus та візуалізацію в Grafana, а також автоматичне розгортання Django-додатку.
 
 ## Структура проєкту
 
@@ -53,28 +53,50 @@ Project/
 │   │   ├── outputs.tf       # Виведення інформації про Jenkins
 │   │   └── providers.tf     # Провайдери для Jenkins
 │   │
-│   └── argo_cd/             # Модуль для ArgoCD
-│       ├── argo_cd.tf       # Розгортання ArgoCD через Helm
-│       ├── values.yaml      # Налаштування ArgoCD
-│       ├── variables.tf     # Змінні для ArgoCD
-│       ├── outputs.tf       # Виведення інформації про ArgoCD
-│       ├── providers.tf     # Провайдери для ArgoCD
-│       └── charts/          # Helm чарт для ArgoCD Application
-│           ├── Chart.yaml
-│           ├── values.yaml
-│           └── templates/
-│               ├── application.yaml
-│               └── repository.yaml
+│   ├── argo_cd/             # Модуль для ArgoCD
+│   │   ├── argo_cd.tf       # Розгортання ArgoCD через Helm
+│   │   ├── values.yaml      # Налаштування ArgoCD
+│   │   ├── variables.tf     # Змінні для ArgoCD
+│   │   ├── outputs.tf       # Виведення інформації про ArgoCD
+│   │   ├── providers.tf     # Провайдери для ArgoCD
+│   │   └── charts/          # Helm чарт для ArgoCD Application
+│   │       ├── Chart.yaml
+│   │       ├── values.yaml
+│   │       └── templates/
+│   │           ├── application.yaml
+│   │           └── repository.yaml
+│   │
+│   ├── prometheus/          # Модуль для Prometheus
+│   │   ├── prometheus.tf    # Розгортання Prometheus через Helm
+│   │   ├── values.yaml      # Налаштування Prometheus
+│   │   ├── variables.tf     # Змінні для Prometheus
+│   │   ├── outputs.tf       # Виведення інформації про Prometheus
+│   │   └── providers.tf     # Провайдери для Prometheus
+│   │
+│   └── grafana/             # Модуль для Grafana
+│       ├── grafana.tf       # Розгортання Grafana через Helm
+│       ├── values.yaml      # Налаштування Grafana
+│       ├── variables.tf     # Змінні для Grafana
+│       ├── outputs.tf       # Виведення інформації про Grafana
+│       └── providers.tf     # Провайдери для Grafana
 │
-└── charts/
-    └── django-app/          # Helm чарт для Django додатку
-        ├── templates/
-        │   ├── deployment.yaml
-        │   ├── service.yaml
-        │   ├── configmap.yaml
-        │   └── hpa.yaml
-        ├── Chart.yaml
-        └── values.yaml
+├── charts/
+│   └── django-app/          # Helm чарт для Django додатку
+│       ├── templates/
+│       │   ├── deployment.yaml
+│       │   ├── service.yaml
+│       │   ├── configmap.yaml
+│       │   └── hpa.yaml
+│       ├── Chart.yaml
+│       └── values.yaml
+│
+└── Django/                  # Django додаток
+    ├── app/                 # Вихідний код Django проекту
+    ├── Dockerfile           # Dockerfile для збірки образу
+    ├── Jenkinsfile          # CI/CD pipeline для Jenkins
+    ├── docker-compose.yaml  # Для локального розгортання
+    └── nginx/
+        └── default.conf     # Конфігурація Nginx для проксування на локальному серидовищі
 ```
 
 ## Передумови
@@ -99,14 +121,25 @@ cp terraform.tfvars.example terraform.tfvars
 2. Відредагуйте `terraform.tfvars` і вкажіть свої значення:
 
 ```hcl
+# Jenkins
 jenkins_admin_password = "your-secure-password"
+
+# GitHub
 github_username        = "your-github-username"
 github_pat             = "github_pat_xxxxxxxxxxxxx"  # GitHub Personal Access Token
-github_url             = "https://github.com/s-rybak/goit-devops-testapp-hw"
-github_tf_url          = "https://github.com/your-username/your-repo/tree/your-branch"
-github_tf_branch       = "your-branch"
+github_url             = "https://github.com/your-username/your-app-repo"
+github_tf_url          = "https://github.com/your-username/your-infra-repo"
+github_tf_branch       = "main"
 github_main_branch     = "main"
 helm_chart_path        = "Project/charts/django-app"
+
+# Grafana
+grafana_admin_password = "your-grafana-password"
+
+# RDS PostgreSQL
+rds_db_password        = "your-db-password"
+rds_db_user            = "postgres"
+rds_db_name            = "myapp"
 ```
 
 **Важливо:** GitHub Personal Access Token потрібен для доступу Jenkins та ArgoCD до репозиторіїв. Створіть токен з правами доступу до потрібних репозиторіїв з правами потрібними для коміту
@@ -212,6 +245,8 @@ VPC забезпечує ізоляцію мережі та контроль н�
 - Публічні підмережі - для веб-серверів, балансувальників навантаження
 - Приватні підмережі - для баз даних, бекенд-сервісів
 
+---
+
 ### 3. Модуль `ecr`
 
 **Призначення:** Створення репозиторію Amazon ECR (Elastic Container Registry) для зберігання Docker-образів.
@@ -309,8 +344,17 @@ ECR - це приватний реєстр Docker-образів від AWS
 
 **Вивід:**
 
-- **`db_endpoint`** – endpoint створеної БД ( Aurora або RDS інстансу).
+- **`db_endpoint`** – endpoint створеної БД (Aurora або RDS інстансу).
 - **`db_security_group_id`** – ID security group, яка використовується для доступу до БД.
+- **`db_host`** – hostname бази даних (без порту).
+- **`db_port`** – порт бази даних.
+- **`db_name`** – назва бази даних.
+- **`db_username`** – username для підключення.
+- **`db_password`** – password для підключення (sensitive).
+
+**Автоматичне створення Kubernetes Secret:**
+
+Після створення RDS, у `main.tf` автоматично створюється Kubernetes Secret `rds-credentials` з даними для підключення до бази, для безпечного збереження і використання сенситив данних в додатку.
 
 **Приклад використання модуля:**
 
@@ -404,96 +448,8 @@ module "rds" {
 
 **Навіщо потрібен:** Jenkins забезпечує автоматизацію CI/CD процесів - збірку, тестування та публікацію Docker образів в ECR.
 
-**Тестовий проект:** https://github.com/s-rybak/goit-devops-testapp-hw  
+**Тестовий проект:**
 В цьому репозиторії знаходиться Django додаток та `Jenkinsfile` з описом пайплайну.
-
-Jenkinsfile:
-
-```
-pipeline {
-  agent {
-    kubernetes {
-      yaml """
-apiVersion: v1
-kind: Pod
-metadata:
-  labels:
-    some-label: jenkins-kaniko
-spec:
-  serviceAccountName: jenkins-sa
-  containers:
-    - name: kaniko
-      image: gcr.io/kaniko-project/executor:v1.16.0-debug
-      imagePullPolicy: Always
-      command:
-        - sleep
-      args:
-        - 99d
-    - name: git
-      image: alpine/git
-      command:
-        - sleep
-      args:
-        - 99d
-"""
-    }
-  }
-
-  environment {
-    ECR_REGISTRY = "767415906716.dkr.ecr.us-east-1.amazonaws.com"
-    IMAGE_NAME   = "lesson-5-ecr"
-    IMAGE_TAG    = "v1.0.${BUILD_NUMBER}"
-
-    COMMIT_EMAIL = "jenkins@localhost"
-    COMMIT_NAME  = "jenkins"
-    GIT_REPO_URL = "github.com/s-rybak/goit-devops-hw/"
-  }
-
-  stages {
-    stage('Build & Push Docker Image') {
-      steps {
-        container('kaniko') {
-          sh '''
-            /kaniko/executor \\
-              --context `pwd`/docker/django \\
-              --dockerfile `pwd`/docker/django/Dockerfile \\
-              --destination=$ECR_REGISTRY/$IMAGE_NAME:$IMAGE_TAG \\
-              --cache=true \\
-              --insecure \\
-              --skip-tls-verify
-          '''
-        }
-      }
-    }
-
-    stage('Update Chart Tag in Git') {
-      steps {
-        container('git') {
-          withCredentials([usernamePassword(credentialsId: 'github-token', usernameVariable: 'GIT_USERNAME', passwordVariable: 'GIT_PAT')]) {
-            sh '''
-              git clone https://$GIT_USERNAME:$GIT_PAT@$GIT_REPO_URL
-              cd goit-devops-hw
-              git config --global --add safe.directory /home/jenkins/agent/workspace/goit-django-docker
-              git checkout lesson-8-9
-              cd Project/charts/django-app
-
-              sed -i "s/tag: .*/tag: $IMAGE_TAG/" values.yaml
-
-              git config user.email "$COMMIT_EMAIL"
-              git config user.name "$COMMIT_NAME"
-
-              git add values.yaml
-              git commit -m "Update image tag to $IMAGE_TAG"
-              git push origin lesson-8-9
-            '''
-          }
-        }
-      }
-    }
-  }
-}
-
-```
 
 ---
 
@@ -524,6 +480,81 @@ spec:
 - `argocd_namespace` - namespace де розгорнуто ArgoCD
 
 **Навіщо потрібен:** ArgoCD забезпечує декларативне управління Kubernetes ресурсами через Git репозиторій (GitOps), автоматично синхронізуючи стан кластера з репозиторієм.
+
+---
+
+### 8. Модуль `prometheus`
+
+**Призначення:** Розгортання Prometheus для моніторингу та збору метрик з Kubernetes кластера.
+
+**Що створює:**
+
+- **Prometheus Server** - сервер для збору та зберігання метрик
+- **Alertmanager** - компонент для управління алертами
+- **Node Exporter** - збір метрик з worker nodes
+- **Kube State Metrics** - метрики стану Kubernetes об'єктів
+
+**Вхідні параметри:**
+
+- `namespace` - namespace для Prometheus (за замовчуванням: prometheus)
+- `chart_version` - версія Helm chart для Prometheus
+
+**Вивід:**
+
+- `prometheus_namespace` - namespace де розгорнуто Prometheus
+- `prometheus_service_name` - ім'я сервісу Prometheus
+- `prometheus_chart_version` - версія Helm chart
+- `prometheus_server_url` - внутрішній URL для підключення Grafana
+
+**Навіщо потрібен:** Prometheus забезпечує моніторинг всіх компонентів інфраструктури та додатків, збираючи метрики в реальному часі методом pull.
+
+---
+
+### 9. Модуль `grafana`
+
+**Призначення:** Розгортання Grafana для візуалізації метрик та створення дашбордів.
+
+**Що створює:**
+
+- **Grafana** - розгортання Grafana через офіційний Helm chart
+- **Data Source** - автоматичне підключення Prometheus як джерела даних
+- **Service** - LoadBalancer сервіс для доступу до UI
+
+**Вхідні параметри:**
+
+- `namespace` - namespace для Grafana (за замовчуванням: grafana)
+- `chart_version` - версія Helm chart для Grafana
+- `grafana_admin_password` - пароль адміністратора Grafana
+- `prometheus_url` - URL Prometheus сервера для data source
+
+**Вивід:**
+
+- `grafana_namespace` - namespace де розгорнуто Grafana
+- `grafana_service_name` - ім'я сервісу Grafana
+- `grafana_chart_version` - версія Helm chart
+
+**Навіщо потрібен:** Grafana надає потужний інтерфейс для візуалізації метрик з Prometheus, створення кастомних дашбордів та налаштування алертів.
+
+---
+
+## Django Application
+
+### Опис
+
+Тестовий Django додаток для демонстрації роботи CI/CD:
+
+- **app/** - вихідний код Django проекту
+- **Dockerfile** - Конфігурація для створення Docker-image
+- **Jenkinsfile** - Опис CI/CD pipeline для Jenkins
+- **docker-compose.yaml** - Конфігурація для Docker compose
+- **nginx/** - конфігурація Nginx для локального проксування додатку
+
+### Jenkinsfile
+
+Pipeline для автоматичної збірки та деплою Django додатку:
+
+1. Збірка Docker-image та публікація його в ecr з тагом нової версії
+2. Оновлення тегу версії Docker-image в values.yaml хельм чарту додатку
 
 ---
 
@@ -573,65 +604,6 @@ terraform {
 }
 ```
 
-У файлі `main.tf` міститься закоментована конфігурація helm.
-
-```
-provider "helm" {
-  kubernetes {
-    host                   = data.aws_eks_cluster.eks.endpoint
-    cluster_ca_certificate = base64decode(data.aws_eks_cluster.eks.certificate_authority[0].data)
-    token                  = data.aws_eks_cluster_auth.eks.token
-  }
-}
-
-data "aws_eks_cluster" "eks" {
-  name = module.eks.eks_cluster_name
-}
-
-data "aws_eks_cluster_auth" "eks" {
-  name = module.eks.eks_cluster_name
-}
-```
-
-Та модулі jenkins і ArgoCD
-
-```
-#Підключаємо модуль Jenkins
-module "jenkins" {
-  source       = "./modules/jenkins"
-  cluster_name = module.eks.eks_cluster_name
-  jenkins_admin_password = var.jenkins_admin_password
-  github_username = var.github_username
-  github_pat = var.github_pat
-  github_url = var.github_url
-  github_main_branch = var.github_main_branch
-  oidc_provider_arn = module.eks.oidc_provider_arn
-  oidc_provider_url = module.eks.oidc_provider_url
-  providers = {
-    helm = helm
-  }
-}
-
-#Підключаємо модуль Argo CD
-module "argo_cd" {
-  source       = "./modules/argo_cd"
-  namespace    = "argocd"
-  chart_version = "5.46.4"
-  github_username = var.github_username
-  github_pat = var.github_pat
-  github_url = var.github_tf_url
-  github_main_branch = var.github_tf_branch
-}
-
-```
-
-Після створення EKS за допомогою модуля `eks`, розкоментуйте цю конфігурацію та виконайте:
-
-```bash
-terraform init -migrate-state
-terraform apply
-```
-
 ## Вивід проєкту
 
 Після успішного застосування конфігурації, Terraform виведе наступну інформацію:
@@ -659,6 +631,7 @@ terraform apply
 - `eks_cluster_name` - назва EKS кластера
 - `eks_node_role_arn` - ARN IAM-ролі для worker nodes
 - `oidc_provider_arn` - ARN OIDC провайдера
+- `oidc_provider_url` - URL OIDC провайдера
 
 **RDS:**
 
@@ -676,6 +649,20 @@ terraform apply
 - `argocd_server_url` - URL для доступу до ArgoCD UI
 - `argocd_admin_password` - початковий пароль адміністратора
 - `argocd_namespace` - namespace ArgoCD
+
+**Prometheus:**
+
+- `prometheus_namespace` - namespace Prometheus
+- `prometheus_server_url` - URL Prometheus сервера
+
+**Grafana:**
+
+- `grafana_namespace` - namespace Grafana
+- `grafana_service_name` - ім'я сервісу Grafana
+
+---
+
+---
 
 ## Додаткові команди
 
@@ -703,6 +690,8 @@ terraform fmt
 terraform validate
 ```
 
+---
+
 ## Робота з EKS та Kubernetes
 
 ### Налаштування kubectl для підключення до EKS
@@ -723,24 +712,27 @@ kubectl get nodes
 ### Перегляд розгорнутих ресурсів
 
 ```bash
+# Переглянути всі namespace
+kubectl get namespaces
+
 # Переглянути деплойменти
-kubectl get deployments
+kubectl get deployments -A
 
 # Переглянути поди
-kubectl get pods
+kubectl get pods -A
 
 # Переглянути сервіси
-kubectl get services
+kubectl get services -A
 
 # Переглянути HPA
-kubectl get hpa
+kubectl get hpa -A
 ```
 
 ### Перегляд логів Django-додатку
 
 ```bash
 # Отримати назву пода
-kubectl get pods
+kubectl get pods -n default
 
 # Переглянути логи
 kubectl logs <pod-name>
@@ -760,6 +752,12 @@ helm list -n jenkins
 
 # Переглянути релізи ArgoCD
 helm list -n argocd
+
+# Переглянути релізи Prometheus
+helm list -n prometheus
+
+# Переглянути релізи Grafana
+helm list -n grafana
 ```
 
 ### Масштабування додатку вручну
@@ -791,7 +789,7 @@ kubectl get svc -n jenkins
 
 ### Налаштування Jenkins Pipeline
 
-1. **Зайдіть в Jenkins UI** (http://localhost:8080)
+1. **Зайдіть в Jenkins UI**
 
 2. **Апрувте скрипт в Jenkins Security:**
 
@@ -799,8 +797,6 @@ kubectl get svc -n jenkins
    - Затвердіть скрипт, що очікує апруву (`seed-job`)
 
 Після чого створиться пайплайн. Джоба під назвою `goit-django-docker`
-
-**Примітка:** Jenkinsfile знаходиться в репозиторії https://github.com/s-rybak/goit-devops-testapp-hw його код можна побачити вище в цьому файлі
 
 ### Перегляд логів Jenkins
 
@@ -840,12 +836,12 @@ kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.pas
 kubectl get applications -n argocd
 
 # Детальна інформація про додаток
-kubectl describe application example-app  -n argocd
+kubectl describe application example-app -n argocd
 ```
 
 ### Синхронізація додатку
 
-ArgoCD автоматично відстежує зміни в Git репозиторії
+ArgoCD автоматично відстежує зміни в Git репозиторії та синхронізує стан кластера.
 
 ### Перегляд логів ArgoCD
 
@@ -857,11 +853,85 @@ kubectl logs -n argocd -l app.kubernetes.io/name=argocd-server -f
 kubectl logs -n argocd -l app.kubernetes.io/name=argocd-application-controller -f
 ```
 
+---
+
+## Робота з Prometheus
+
+### Доступ до Prometheus UI
+
+Отримайте сервіс Prometheus:
+
+```bash
+kubectl get svc -n prometheus
+```
+
+### Перегляд метрик
+
+```bash
+# Переглянути всі поди Prometheus
+kubectl get pods -n prometheus
+
+# Переглянути логи Prometheus сервера
+kubectl logs -n prometheus -l app.kubernetes.io/name=prometheus -f
+```
+
+---
+
+## Робота з Grafana
+
+### Доступ до Grafana UI
+
+Отримайте сервіс Grafana:
+
+```bash
+kubectl get svc -n grafana
+```
+
+**Логін:**
+
+- Username: `admin`
+- Password: значення з `terraform.tfvars` (змінна `grafana_admin_password`)
+
+### Перевірка Data Sources
+
+Prometheus автоматично налаштований як data source. Перевірте в:
+`Configuration` → `Data Sources` → `Prometheus`
+
+### Дашборди
+
+В проєкті налаштовані такі дашборди в сеції `default`:
+
+- **kubernetes-cluster** (ID: 7249)
+- **node-exporter** (ID: 1860)
+- **pod-monitoring** (ID: 6417)
+
+### Імпорт дашбордів
+
+Якщо дашбордів не достатньо можна додати ще, для цього:
+
+1. Перейдіть в `Dashboards` → `Import`
+2. Введіть ID дашборду
+3. Виберіть Prometheus як data source
+
+### Перегляд логів Grafana
+
+```bash
+# Переглянути всі поди Grafana
+kubectl get pods -n grafana
+
+# Переглянути логи Grafana
+kubectl logs -n grafana -l app.kubernetes.io/name=grafana -f
+```
+
+---
+
 ## Порядок розгортання проєкту
 
 ### Крок 1: Підготовка змінних
 
 ```bash
+cd Project
+
 # Скопіюйте файл з прикладом змінних
 cp terraform.tfvars.example terraform.tfvars
 
@@ -924,7 +994,7 @@ data "aws_eks_cluster_auth" "eks" {
 }
 ```
 
-та модулі `jenkins` і `argo_cd`
+та модулі `jenkins`, `argo_cd`, `rds`, `kubernetes_secret`, `prometheus`, `grafana`
 
 ```bash
 
@@ -955,22 +1025,119 @@ module "argo_cd" {
   github_main_branch = var.github_tf_branch
   helm_chart_path = var.helm_chart_path
 }
+
+#Підключаємо модуль RDS
+module "rds" {
+  source = "./modules/rds"
+
+  name                       = "myapp-db"
+  use_aurora                 = false
+
+  # --- Aurora-only ---
+  engine_cluster             = "aurora-postgresql"
+  engine_version_cluster     = "15.3"
+  parameter_group_family_aurora = "aurora-postgresql15"
+  aurora_replica_count       = 2
+
+  # --- RDS-only ---
+  engine                     = "postgres"
+  engine_version             = "17.2"
+  parameter_group_family_rds = "postgres17"
+
+  # Common
+  instance_class             = "db.t3.medium"
+  allocated_storage          = 20
+  db_name                    = var.rds_db_name
+  username                   = var.rds_db_user
+  password                   = var.rds_db_password
+  subnet_private_ids         = module.vpc.private_subnets
+  subnet_public_ids          = module.vpc.public_subnets
+  publicly_accessible        = true
+  vpc_id                     = module.vpc.vpc_id
+  multi_az                   = true
+  backup_retention_period    = 7
+  parameters = {
+    max_connections              = "200"
+    log_min_duration_statement   = "500"
+  }
+
+  tags = {
+    Environment = "dev"
+    Project     = "myapp"
+  }
+}
+
+#Створюємо Kubernetes Secret з даними RDS
+resource "kubernetes_secret" "rds_credentials" {
+  metadata {
+    name      = "rds-credentials"
+    namespace = "default"
+  }
+
+  data = {
+    POSTGRES_HOST     = module.rds.db_host
+    POSTGRES_PORT     = tostring(module.rds.db_port)
+    POSTGRES_DB       = module.rds.db_name
+    POSTGRES_USER     = module.rds.db_username
+    POSTGRES_PASSWORD = module.rds.db_password
+  }
+
+  type = "Opaque"
+
+  depends_on = [module.eks, module.rds]
+}
+
+#Підключаємо модуль Prometheus
+module "prometheus" {
+  source        = "./modules/prometheus"
+  namespace     = "prometheus"
+  chart_version = "25.8.0"
+  providers = {
+    helm = helm
+  }
+}
+
+#Підключаємо модуль Grafana
+module "grafana" {
+  source       = "./modules/grafana"
+  namespace    = "grafana"
+  chart_version = "7.0.0"
+  grafana_admin_password = var.grafana_admin_password
+  prometheus_url = module.prometheus.prometheus_server_url
+  providers = {
+    helm = helm
+  }
+  depends_on = [module.prometheus]
+}
 ```
 
-### Крок 4: Ініціалізація та розгортання `jenkins` + `argo_cd`
+Модуль `rds` було закоментовано, для того щоб при створенні передати секрети в `kubernetes_secret` який, в свою чергу, залежить від `eks`, що має бути створений в першу чергу
+
+### Крок 4: Ініціалізація та розгортання `jenkins` + `argo_cd` + `rds` + `kubernetes_secret` + `prometheus` + `grafana`
 
 ```bash
 # Застосування змін
 terraform apply
 ```
 
+**Що буде створено:**
+
+- RDS PostgreSQL база даних
+- Kubernetes Secret з даними RDS
+- Jenkins для CI/CD
+- ArgoCD для GitOps
+- Prometheus для моніторингу
+- Grafana для візуалізації
+
 Після чого можна починати користуватись інфраструктурою як описано вище. Для початку потрібно налаштувати `jenkins`
+
+---
 
 ## Тестування CI/CD Pipeline
 
-1. **Внесіть зміни в тестовий проект:**
+1. **Внесіть зміни в Django проект:**
 
-   - Для прикладу: https://github.com/s-rybak/goit-devops-testapp-hw
+   - Змініть код в `Project/Django/app/`
    - Зробіть commit і push змін
 
 2. **Запустіть Jenkins Job:**
@@ -980,18 +1147,23 @@ terraform apply
    - Оновить тег в Git репозиторії з Helm чартом
 
 3. **ArgoCD автоматично синхронізує:**
+
    - ArgoCD виявить зміни в Git репозиторії
    - Автоматично оновить Django додаток в кластері
 
 ### Повний цикл CI/CD
 
 ```
-1. Developer → Push code to GitHub (goit-devops-testapp-hw)
+1. Developer → Push code to GitHub (Project/Django/)
 2. Jenkins → Build Docker image → Push to ECR
 3. Jenkins → Update Helm chart values in Git
 4. ArgoCD → Detect changes → Deploy to EKS
 5. Kubernetes → Running Django application
+6. Prometheus → Collect metrics
+7. Grafana → Visualize metrics
 ```
+
+---
 
 ## Очищення ресурсів
 

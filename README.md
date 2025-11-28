@@ -448,96 +448,8 @@ module "rds" {
 
 **Навіщо потрібен:** Jenkins забезпечує автоматизацію CI/CD процесів - збірку, тестування та публікацію Docker образів в ECR.
 
-**Тестовий проект:** https://github.com/s-rybak/goit-devops-testapp-hw  
+**Тестовий проект:**
 В цьому репозиторії знаходиться Django додаток та `Jenkinsfile` з описом пайплайну.
-
-Jenkinsfile:
-
-```
-pipeline {
-  agent {
-    kubernetes {
-      yaml """
-apiVersion: v1
-kind: Pod
-metadata:
-  labels:
-    some-label: jenkins-kaniko
-spec:
-  serviceAccountName: jenkins-sa
-  containers:
-    - name: kaniko
-      image: gcr.io/kaniko-project/executor:v1.16.0-debug
-      imagePullPolicy: Always
-      command:
-        - sleep
-      args:
-        - 99d
-    - name: git
-      image: alpine/git
-      command:
-        - sleep
-      args:
-        - 99d
-"""
-    }
-  }
-
-  environment {
-    ECR_REGISTRY = "767415906716.dkr.ecr.us-east-1.amazonaws.com"
-    IMAGE_NAME   = "lesson-5-ecr"
-    IMAGE_TAG    = "v1.0.${BUILD_NUMBER}"
-
-    COMMIT_EMAIL = "jenkins@localhost"
-    COMMIT_NAME  = "jenkins"
-    GIT_REPO_URL = "github.com/s-rybak/goit-devops-hw/"
-  }
-
-  stages {
-    stage('Build & Push Docker Image') {
-      steps {
-        container('kaniko') {
-          sh '''
-            /kaniko/executor \\
-              --context `pwd`/docker/django \\
-              --dockerfile `pwd`/docker/django/Dockerfile \\
-              --destination=$ECR_REGISTRY/$IMAGE_NAME:$IMAGE_TAG \\
-              --cache=true \\
-              --insecure \\
-              --skip-tls-verify
-          '''
-        }
-      }
-    }
-
-    stage('Update Chart Tag in Git') {
-      steps {
-        container('git') {
-          withCredentials([usernamePassword(credentialsId: 'github-token', usernameVariable: 'GIT_USERNAME', passwordVariable: 'GIT_PAT')]) {
-            sh '''
-              git clone https://$GIT_USERNAME:$GIT_PAT@$GIT_REPO_URL
-              cd goit-devops-hw
-              git config --global --add safe.directory /home/jenkins/agent/workspace/goit-django-docker
-              git checkout lesson-8-9
-              cd Project/charts/django-app
-
-              sed -i "s/tag: .*/tag: $IMAGE_TAG/" values.yaml
-
-              git config user.email "$COMMIT_EMAIL"
-              git config user.name "$COMMIT_NAME"
-
-              git add values.yaml
-              git commit -m "Update image tag to $IMAGE_TAG"
-              git push origin lesson-8-9
-            '''
-          }
-        }
-      }
-    }
-  }
-}
-
-```
 
 ---
 
@@ -690,65 +602,6 @@ terraform {
     profile        = "goithw"
   }
 }
-```
-
-У файлі `main.tf` міститься закоментована конфігурація helm.
-
-```
-provider "helm" {
-  kubernetes {
-    host                   = data.aws_eks_cluster.eks.endpoint
-    cluster_ca_certificate = base64decode(data.aws_eks_cluster.eks.certificate_authority[0].data)
-    token                  = data.aws_eks_cluster_auth.eks.token
-  }
-}
-
-data "aws_eks_cluster" "eks" {
-  name = module.eks.eks_cluster_name
-}
-
-data "aws_eks_cluster_auth" "eks" {
-  name = module.eks.eks_cluster_name
-}
-```
-
-Та модулі jenkins і ArgoCD
-
-```
-#Підключаємо модуль Jenkins
-module "jenkins" {
-  source       = "./modules/jenkins"
-  cluster_name = module.eks.eks_cluster_name
-  jenkins_admin_password = var.jenkins_admin_password
-  github_username = var.github_username
-  github_pat = var.github_pat
-  github_url = var.github_url
-  github_main_branch = var.github_main_branch
-  oidc_provider_arn = module.eks.oidc_provider_arn
-  oidc_provider_url = module.eks.oidc_provider_url
-  providers = {
-    helm = helm
-  }
-}
-
-#Підключаємо модуль Argo CD
-module "argo_cd" {
-  source       = "./modules/argo_cd"
-  namespace    = "argocd"
-  chart_version = "5.46.4"
-  github_username = var.github_username
-  github_pat = var.github_pat
-  github_url = var.github_tf_url
-  github_main_branch = var.github_tf_branch
-}
-
-```
-
-Після створення EKS за допомогою модуля `eks`, розкоментуйте цю конфігурацію та виконайте:
-
-```bash
-terraform init -migrate-state
-terraform apply
 ```
 
 ## Вивід проєкту
@@ -1044,7 +897,7 @@ kubectl get svc -n grafana
 Prometheus автоматично налаштований як data source. Перевірте в:
 `Configuration` → `Data Sources` → `Prometheus`
 
-### Дашбордів
+### Дашборди
 
 В проєкті налаштовані такі дашборди в сеції `default`:
 
@@ -1054,7 +907,7 @@ Prometheus автоматично налаштований як data source. П�
 
 ### Імпорт дашбордів
 
-Якщо дашбордів не достатньо можна додати ще для цього:
+Якщо дашбордів не достатньо можна додати ще, для цього:
 
 1. Перейдіть в `Dashboards` → `Import`
 2. Введіть ID дашборду
@@ -1103,12 +956,6 @@ terraform apply
 - VPC з підмережами
 - ECR репозиторій
 - EKS кластер з worker nodes
-- RDS PostgreSQL база даних
-- Kubernetes Secret з даними RDS
-- Jenkins для CI/CD
-- ArgoCD для GitOps
-- Prometheus для моніторингу
-- Grafana для візуалізації
 
 ### Крок 3: Налаштування kubectl
 
@@ -1266,12 +1113,21 @@ module "grafana" {
 
 Модуль `rds` було закоментовано, для того щоб при створенні передати секрети в `kubernetes_secret` який, в свою чергу, залежить від `eks`, що має бути створений в першу чергу
 
-### Крок 4: Ініціалізація та розгортання `jenkins` + `argo_cd`
+### Крок 4: Ініціалізація та розгортання `jenkins` + `argo_cd` + `rds` + `kubernetes_secret` + `prometheus` + `grafana`
 
 ```bash
 # Застосування змін
 terraform apply
 ```
+
+**Що буде створено:**
+
+- RDS PostgreSQL база даних
+- Kubernetes Secret з даними RDS
+- Jenkins для CI/CD
+- ArgoCD для GitOps
+- Prometheus для моніторингу
+- Grafana для візуалізації
 
 Після чого можна починати користуватись інфраструктурою як описано вище. Для початку потрібно налаштувати `jenkins`
 
